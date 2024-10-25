@@ -94,6 +94,28 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     return nil
   end
 
+  local function abbrevname(t)
+    return string.sub(t,1,1)..". "
+  end
+
+  local function GetNameString(name)
+    local abbrev = ShaguPlates_config.unitframes.abbrevname == "1" or nil
+    local size = 20
+
+    -- first try to only abbreviate the first word
+    if abbrev and name and strlen(name) > size then
+      name = string.gsub(name, "^(%S+) ", abbrevname)
+    end
+
+    -- abbreviate all if it still doesn't fit
+    if abbrev and name and strlen(name) > size then
+      name = string.gsub(name, "(%S+) ", abbrevname)
+    end
+
+    return name
+  end
+
+
   local function GetUnitType(red, green, blue)
     if red > .9 and green < .2 and blue < .2 then
       return "ENEMY_NPC"
@@ -307,6 +329,9 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     nameplate.glow:SetTexture(ShaguPlates.media["img:dot"])
     nameplate.glow:Hide()
 
+    nameplate.guild = nameplate:CreateFontString(nil, "OVERLAY")
+    nameplate.guild:SetPoint("BOTTOM", nameplate.health, "BOTTOM", 0, 0)
+
     nameplate.level = nameplate:CreateFontString(nil, "OVERLAY")
     nameplate.level:SetPoint("RIGHT", nameplate.health, "LEFT", -3, 0)
 
@@ -433,6 +458,8 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     nameplate.health.text:SetFont(font, font_size - 2, "OUTLINE")
     nameplate.health.text:SetJustifyH(C.nameplates.hptextpos)
 
+    nameplate.guild:SetFont(font, font_size, font_style)
+
     nameplate.glow:SetWidth(C.nameplates.width + 60)
     nameplate.glow:SetHeight(C.nameplates.heighthealth + 30)
     nameplate.glow:SetVertexColor(glowr, glowg, glowb, glowa)
@@ -486,12 +513,13 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     local hpmin, hpmax = plate.original.healthbar:GetMinMaxValues()
     local name = plate.original.name:GetText()
     local level = plate.original.level:IsShown() and plate.original.level:GetObjectType() == "FontString" and tonumber(plate.original.level:GetText()) or "??"
-    local class, ulevel, elite, player = GetUnitData(name, true)
+    local class, ulevel, elite, player, guild = GetUnitData(name, true)
     local target = plate.istarget
     local mouseover = UnitExists("mouseover") and plate.original.glow:IsShown() or nil
     local unitstr = target and "target" or mouseover and "mouseover" or nil
     local red, green, blue = plate.original.healthbar:GetStatusBarColor()
     local unittype = GetUnitType(red, green, blue) or "ENEMY_NPC"
+    local font_size = C.nameplates.use_unitfonts == "1" and C.global.font_unit_size or C.global.font_size
 
     -- ignore players with npc names if plate level is lower than player level
     if ulevel and ulevel > (level == "??" and -1 or level) then player = nil end
@@ -539,7 +567,22 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     end
 
     -- target indicator
-    if target and C.nameplates.targethighlight == "1" then
+    if superwow_active and C.nameplates.outcombatstate == "1" then
+      local guid = plate.parent:GetName(1) or ""
+      local target = guid.."target"
+
+      if UnitAffectingCombat(guid) then
+        if UnitIsUnit(target, "player") then
+          plate.health.backdrop:SetBackdropBorderColor(.7,.2,.3,1)
+        elseif UnitExists(target) or UnitIsPlayer(guid) then
+          plate.health.backdrop:SetBackdropBorderColor(.7,.7,.2,1)
+        else
+          plate.health.backdrop:SetBackdropBorderColor(.2,.7,.7,1)
+        end
+      else
+        plate.health.backdrop:SetBackdropBorderColor(.2,.2,.2,1)
+      end
+    elseif target and C.nameplates.targethighlight == "1" then
       plate.health.backdrop:SetBackdropBorderColor(plate.health.hlr, plate.health.hlg, plate.health.hlb, plate.health.hla)
     elseif C.nameplates.outfriendlynpc == "1" and unittype == "FRIENDLY_NPC" then
       plate.health.backdrop:SetBackdropBorderColor(.2,.7,.3,1)
@@ -564,20 +607,26 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       plate.level:Hide()
       plate.name:Hide()
       plate.health:Hide()
-      plate.glow:SetPoint("CENTER", plate.health, "CENTER", 0, 16)
+      plate.guild:Hide()
       plate.totem:Show()
     elseif HidePlate(unittype, name, (hpmax-hp == hpmin), target) then
       plate.level:SetPoint("RIGHT", plate.name, "LEFT", -3, 0)
       plate.name:SetParent(plate)
+      plate.guild:SetPoint("BOTTOM", plate.name, "BOTTOM", -2, -(font_size + 2))
 
       plate.level:Show()
       plate.name:Show()
       plate.health:Hide()
-      plate.glow:SetPoint("CENTER", plate.health, "CENTER", 0, 16)
+      if guild and C.nameplates.showguildname == "1" then
+        plate.glow:SetPoint("CENTER", plate.name, "CENTER", 0, -(font_size / 2) - 2)
+      else
+        plate.glow:SetPoint("CENTER", plate.name, "CENTER", 0, 0)
+      end
       plate.totem:Hide()
     else
       plate.level:SetPoint("RIGHT", plate.health, "LEFT", -5, 0)
       plate.name:SetParent(plate.health)
+      plate.guild:SetPoint("BOTTOM", plate.health, "BOTTOM", 0, -(font_size + 4))
 
       plate.level:Show()
       plate.name:Show()
@@ -586,8 +635,20 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       plate.totem:Hide()
     end
 
-    plate.name:SetText(name)
+    plate.name:SetText(GetNameString(name))
     plate.level:SetText(string.format("%s%s", level, (elitestrings[elite] or "")))
+
+    if guild and C.nameplates.showguildname == "1" then
+      plate.guild:SetText(guild)
+      if guild == GetGuildInfo("player") then
+        plate.guild:SetTextColor(0, 0.9, 0, 1)
+      else
+        plate.guild:SetTextColor(0.8, 0.8, 0.8, 1)
+      end
+      plate.guild:Show()
+    else
+      plate.guild:Hide()
+    end
 
     plate.health:SetMinMaxValues(hpmin, hpmax)
     plate.health:SetValue(hp)
@@ -616,7 +677,7 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       elseif setting == "curmaxpercs" and hasdata then
         plate.health.text:SetText(string.format("%s / %s | %s%%", Abbreviate(rhp), Abbreviate(rhpmax), ceil(hp/hpmax*100)))
       elseif setting == "deficit" then
-        plate.health.text:SetText(string.format("-%s" .. (hasdata and "" or "%%"), Abbreviate(rhpmax) - Abbreviate(rhp)))
+        plate.health.text:SetText(string.format("-%s" .. (hasdata and "" or "%%"), Abbreviate(rhpmax - rhp)))
       else -- "percent" as fallback
         plate.health.text:SetText(string.format("%s%%", ceil(hp/hpmax*100)))
       end
@@ -724,6 +785,20 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     if nameplate.eventcache then
       nameplates:OnDataChanged(nameplate)
       nameplate.eventcache = nil
+    end
+
+    -- reset strata cache on target change
+    if nameplate.istarget ~= target then
+      nameplate.target_strata = nil
+    end
+
+    -- keep target nameplate above others
+    if target and nameplate.target_strata ~= 1 then
+      nameplate:SetFrameStrata("LOW")
+      nameplate.target_strata = 1
+    elseif not target and nameplate.target_strata ~= 0 then
+      nameplate:SetFrameStrata("BACKGROUND")
+      nameplate.target_strata = 0
     end
 
     -- cache target value
@@ -867,6 +942,11 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     -- castbar update
     if C.nameplates["showcastbar"] == "1" and ( C.nameplates["targetcastbar"] == "0" or target ) then
       local cast, nameSubtext, text, texture, startTime, endTime, isTradeSkill = UnitCastingInfo(target and "target" or name)
+
+      -- read enemy casts from SuperWoW if enabled
+      if superwow_active then
+        cast, nameSubtext, text, texture, startTime, endTime, isTradeSkill = UnitCastingInfo(nameplate.parent:GetName(1))
+      end
 
       if not cast then
         nameplate.castbar:Hide()

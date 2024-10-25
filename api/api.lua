@@ -21,6 +21,18 @@ function ShaguPlates.api.strsplit(delimiter, subject)
   return unpack(fields)
 end
 
+-- [ isempty ]
+-- Returns true if a table is empty or not existing, otherwise false.
+-- 'tbl'         [table]        the table that shall be checked
+-- return:      [boolean]       result of the check.
+function ShaguPlates.api.isempty(tbl)
+  if not tbl then return true end
+  for k, v in pairs(tbl) do
+    return false
+  end
+  return true
+end
+
 -- [ checkversion ]
 -- Compares a given version (major,minor,fix) and compares it to the current
 -- 'chkmajor'   [number]        the major number to check
@@ -247,18 +259,20 @@ end
 -- 'str'        [string]         input string that should be matched
 -- 'pat'        [string]         unformatted pattern
 -- returns:     [strings]        matched string in capture order
+local a, b, c, d, e
+local _, va, vb, vc, vd, ve
+local ra, rb, rc, rd, re
 function ShaguPlates.api.cmatch(str, pat)
   -- read capture indexes
-  local a,b,c,d,e = GetCaptures(pat)
-  local _, _, va, vb, vc, vd, ve = string.find(str, ShaguPlates.api.SanitizePattern(pat))
+  a, b, c, d, e = GetCaptures(pat)
+  _, _, va, vb, vc, vd, ve = string.find(str, ShaguPlates.api.SanitizePattern(pat))
 
   -- put entries into the proper return values
-  local ra, rb, rc, rd, re
-  ra = e == "1" and ve or d == "1" and vd or c == "1" and vc or b == "1" and vb or va
-  rb = e == "2" and ve or d == "2" and vd or c == "2" and vc or a == "2" and va or vb
-  rc = e == "3" and ve or d == "3" and vd or a == "3" and va or b == "3" and vb or vc
-  rd = e == "4" and ve or a == "4" and va or c == "4" and vc or b == "4" and vb or vd
-  re = a == "5" and va or d == "5" and vd or c == "5" and vc or b == "5" and vb or ve
+  ra = e == 1 and ve or d == 1 and vd or c == 1 and vc or b == 1 and vb or va
+  rb = e == 2 and ve or d == 2 and vd or c == 2 and vc or a == 2 and va or vb
+  rc = e == 3 and ve or d == 3 and vd or a == 3 and va or b == 3 and vb or vc
+  rd = e == 4 and ve or a == 4 and va or c == 4 and vc or b == 4 and vb or vd
+  re = a == 5 and va or d == 5 and vd or c == 5 and vc or b == 5 and vb or ve
 
   return ra, rb, rc, rd, re
 end
@@ -1035,10 +1049,12 @@ function ShaguPlates.api.CreateBackdrop(f, inset, legacy, transp, backdropSettin
         local border = CreateFrame("Frame", nil, f)
         border:SetFrameLevel(level + 1)
         f.backdrop_border = border
-      end
 
-      f.backdrop.SetBackdropBorderColor = function(self, r, g, b, a)
-        f.backdrop_border:SetBackdropBorderColor(r,g,b,a)
+        local hookSetBackdropBorderColor = f.backdrop.SetBackdropBorderColor
+        f.backdrop.SetBackdropBorderColor = function(self, r, g, b, a)
+          f.backdrop_border:SetBackdropBorderColor(r, g, b, a)
+          hookSetBackdropBorderColor(f.backdrop, r, g, b, a)
+        end
       end
 
       f.backdrop_border:SetAllPoints(f.backdrop)
@@ -1196,26 +1212,64 @@ end
 -- [ GetColoredTime ] --
 -- 'remaining'   the time in seconds that should be converted
 -- return        a colored string including a time unit (m/h/d)
+local color_day, color_hour, color_minute, color_low, color_normal
 function ShaguPlates.api.GetColoredTimeString(remaining)
   if not remaining then return "" end
-  if remaining > 356400 then -- Show days if remaining is > 99 Hours (99 * 60 * 60)
-    local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.daycolor)
-    return ShaguPlates.api.rgbhex(r,g,b) .. round(remaining / 86400) .. "|rd"
-  elseif remaining > 5940 then -- Show hours if remaining is > 99 Minutes (99 * 60)
-    local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.hourcolor)
-    return ShaguPlates.api.rgbhex(r,g,b) .. round(remaining / 3600) .. "|rh"
-  elseif remaining > 99 then -- Show minutes if remaining is > 99 Seconds (99)
-    local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.minutecolor)
-    return ShaguPlates.api.rgbhex(r,g,b) .. round(remaining / 60) .. "|rm"
+
+  -- Show days if remaining is > 99 Hours (99 * 60 * 60)
+  if remaining > 356400 then
+    if not color_day then
+      local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.daycolor)
+      color_day = ShaguPlates.api.rgbhex(r,g,b)
+    end
+
+    return color_day .. round(remaining / 86400) .. "|rd"
+
+  -- Show hours if remaining is > 99 Minutes (99 * 60)
+  elseif remaining > 5940 then
+    if not color_hour then
+      local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.hourcolor)
+      color_hour = ShaguPlates.api.rgbhex(r,g,b)
+    end
+
+    return color_hour .. round(remaining / 3600) .. "|rh"
+
+  -- Show minutes if remaining is > 99 Seconds (99)
+  elseif remaining > 99 then
+    if not color_minute then
+      local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.minutecolor)
+      color_minute = ShaguPlates.api.rgbhex(r,g,b)
+    end
+
+    return color_minute .. round(remaining / 60) .. "|rm"
+
+  -- Show milliseconds on low
   elseif remaining <= 5 and ShaguPlates_config.appearance.cd.milliseconds == "1" then
-    local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.lowcolor)
-    return ShaguPlates.api.rgbhex(r,g,b) .. string.format("%.1f", round(remaining,1))
+    if not color_low then
+      local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.lowcolor)
+      color_low = ShaguPlates.api.rgbhex(r,g,b)
+    end
+
+    return color_low .. string.format("%.1f", round(remaining,1))
+
+  -- Show seconds on low
   elseif remaining <= 5 then
-    local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.lowcolor)
-    return ShaguPlates.api.rgbhex(r,g,b) .. round(remaining)
+    if not color_low then
+      local r,g,b,a = ShaguPlates.api.GetStringColor(C.appearance.cd.lowcolor)
+      color_low = ShaguPlates.api.rgbhex(r,g,b)
+    end
+
+    return color_low .. round(remaining)
+
+  -- Show seconds on normal
   elseif remaining >= 0 then
-    local r, g, b, a = ShaguPlates.api.GetStringColor(C.appearance.cd.normalcolor)
-    return ShaguPlates.api.rgbhex(r,g,b) .. round(remaining)
+    if not color_normal then
+      local r, g, b, a = ShaguPlates.api.GetStringColor(C.appearance.cd.normalcolor)
+      color_normal = ShaguPlates.api.rgbhex(r,g,b)
+    end
+    return color_normal .. round(remaining)
+
+  -- Return empty
   else
     return ""
   end
