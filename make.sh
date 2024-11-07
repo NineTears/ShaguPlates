@@ -16,10 +16,14 @@ mv modules/settings.lua .
 mv modules/cooldown.lua .
 mv modules/nameplates.lua .
 mv modules/superwow.lua .
+mv modules/turtle-wow.lua .
+
 rm modules/*
+
 mv settings.lua modules
 mv cooldown.lua modules
 mv superwow.lua modules
+mv turtle-wow.lua modules
 mv nameplates.lua modules
 
 # replace all variables and frames
@@ -49,6 +53,7 @@ echo '<Ui xmlns="http://www.blizzard.com/wow/ui/">
   <Include file="..\modules\settings.lua"/>
   <Include file="..\modules\nameplates.lua"/>
   <Include file="..\modules\superwow.lua"/>
+  <Include file="..\modules\turtle-wow.lua"/>
 </Ui>' > init/modules.xml
 
 # remove unitframe api
