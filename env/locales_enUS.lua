@@ -18,9 +18,9 @@ ShaguPlates_locale["enUS"]["healduration"] = {
 }
 
 ShaguPlates_locale["enUS"]["bagtypes"] = {
-  ["Quiver"] = "箭袋",
-  ["Soul Bag"] = "灵魂袋",
-  ["Bag"] = "容器",
+  ["Quiver"] = "QUIVER",
+  ["Soul Bag"] = "SOULBAG",
+  ["Bag"] = "DEFAULT",
 }
 
 ShaguPlates_locale["enUS"]["itemtypes"] = {
