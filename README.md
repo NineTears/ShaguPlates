@@ -1,8 +1,8 @@
 # ShaguPlates
 
-A World of Warcraft: Vanilla and Burning Crusade addon, that is compatible to the original game versions 1.12.1 and 2.4.3 from back in the days. This addon modifies and extends the default nameplates by several features.
+<a href="preview/rounded.jpg"><img src="preview/rounded.jpg" float="right" align="right" width="320"></a>
 
-<a href="preview/left.jpg"><img src="preview/rounded.jpg"></a>
+A World of Warcraft: Vanilla and Burning Crusade addon, that is compatible to the original game versions 1.12.1 and 2.4.3 from back in the days. This addon modifies and extends the default nameplates by several features.
 
 Initially, this project started as a fork of CustomNameplates that became an entire rewrite and was then rewritten from scratch several times. At one point, the ShaguPlates got merged into pfUI and received over time many updates there. Nowadays, this addon is a *mostly* auto generated stand-alone version of the pfUI-nameplates to allow people without pfUI to still use its nameplates.
 
@@ -38,6 +38,8 @@ Initially, this project started as a fork of CustomNameplates that became an ent
 * **Vanilla Only** options, such as non-blocking mouse look when right-clicking on nameplates and overlapping health bars can be enabled.
 
 * **Elite and Rare** identifier are displayed as "+" and "R" (or "R+") on the nameplate as soon as a unit has been detected to be either one of those.
+
+* **SuperWoW** support allows to have better nameplates and accurate castbars, even on units that share the same name. ([GitHub](https://github.com/balakethelock/SuperWoW))
 
 ## Commands
 
