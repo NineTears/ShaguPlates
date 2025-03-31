@@ -251,8 +251,6 @@ function ShaguPlates:LoadSkin(s)
 end
 
 ShaguPlates:SetScript("OnEvent", function()
-  -- enforce color updates on each event
-  ShaguPlates:UpdateColors()
 
   -- make sure to initialize and set our fonts
   -- each time an addon got loaded but only
@@ -271,7 +269,6 @@ ShaguPlates:SetScript("OnEvent", function()
 
     -- use "Modern" as default profile on a fresh install
     if ShaguPlates.api.isempty(ShaguPlates_init) and ShaguPlates.api.isempty(ShaguPlates_config) then
-      ShaguPlates_config = ShaguPlates.api.CopyTable(ShaguPlates_profiles["Modern"]) or {}
     end
 
     ShaguPlates:LoadConfig()

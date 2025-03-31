@@ -111,6 +111,13 @@ sed -i 's/message = function(msg)/local message = function(msg)/g' ShaguPlates.l
 sed -i '/print = print or message/d' ShaguPlates.lua
 sed -i '/SIMPLE_CHAT = /d' ShaguPlates.lua
 
+# remove pfUI defaults to modern
+sed -i "/ShaguPlates_config = ShaguPlates.api.CopyTable/d" ShaguPlates.lua
+
+# remove color overwrites
+sed -i '/-- enforce color updates on each event/d' ShaguPlates.lua
+sed -i '/^  ShaguPlates:UpdateColors()/d' ShaguPlates.lua
+
 # add aditional slashcomands
 sed -i "7iSLASH_SHAGUPLATES2 = '/splates'" ShaguPlates.lua
 sed -i "8iSLASH_SHAGUPLATES3 = '/sp'" ShaguPlates.lua

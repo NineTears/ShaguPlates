@@ -10,6 +10,15 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     ["FRIENDLY_PLAYER"] = { .2, .6, 1, .8 }
   }
 
+  local combatstate = {
+    -- gets overwritten by user config
+    ["NOTHREAT"] = { r = .7, g = .7, b = .2, a = 1 },
+    ["THREAT"]   = { r = .7, g = .2, b = .2, a = 1 },
+    ["CASTING"]  = { r = .7, g = .2, b = .7, a = 1 },
+    ["STUN"]     = { r = .2, g = .7, b = .7, a = 1 },
+    ["NONE"]     = { r = .2, g = .2, b = .2, a = 1 },
+  }
+
   local elitestrings = {
     ["elite"] = "+",
     ["rareelite"] = "R+",
@@ -27,6 +36,29 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
 
   -- cache default border color
   local er, eg, eb, ea = GetStringColor(ShaguPlates_config.appearance.border.color)
+
+  local function GetCombatStateColor(guid)
+    local target = guid.."target"
+    local color = false
+
+    if UnitAffectingCombat("player") and UnitAffectingCombat(guid) and not UnitCanAssist("player", guid) then
+      if C.nameplates.ccombatcasting == "1" and (UnitCastingInfo(guid) or UnitChannelInfo(guid)) then
+        color = combatstate.CASTING
+      elseif C.nameplates.ccombatthreat == "1" and UnitIsUnit(target, "player") then
+        color = combatstate.THREAT
+      elseif C.nameplates.ccombatnothreat == "1" and UnitExists(target) then
+        color = combatstate.NOTHREAT
+      elseif C.nameplates.ccombatstun == "1" and not UnitExists(target) and not UnitIsPlayer(guid) then
+        color = combatstate.STUN
+      end
+    end
+
+    return color
+  end
+
+  local function DoNothing()
+    return
+  end
 
   local function IsNamePlate(frame)
     if frame:GetObjectType() ~= NAMEPLATE_FRAMETYPE then return nil end
@@ -162,7 +194,7 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
 
     for id = 1, 16 do
       local effect, _, texture, stacks, _, duration, timeleft = libdebuff:UnitDebuff(unitstr, id)
-      if effect and timeleft then
+      if effect and timeleft and timeleft > 0 then
         local start = GetTime() - ( (duration or 0) - ( timeleft or 0) )
         local stop = GetTime() + ( timeleft or 0 )
         self.debuffcache[id] = self.debuffcache[id] or {}
@@ -172,9 +204,7 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
         self.debuffcache[id].duration = duration or 0
         self.debuffcache[id].start = start
         self.debuffcache[id].stop = stop
-      elseif self.debuffcache[id] then
-        self.debuffcache[id] = nil
-        table.remove(self.debuffcache, id)
+        self.debuffcache[id].empty = nil
       end
     end
 
@@ -182,10 +212,16 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
   end
 
   local function PlateUnitDebuff(self, id)
+    -- break on unknown data
     if not self.debuffcache then return end
     if not self.debuffcache[id] then return end
     if not self.debuffcache[id].stop then return end
 
+    -- break on timeout debuffs
+    if self.debuffcache[id].empty then return end
+    if self.debuffcache[id].stop < GetTime() then return end
+
+    -- return cached debuff
     local c = self.debuffcache[id]
     return c.effect, c.rank, c.texture, c.stacks, c.dtype, c.duration, (c.stop - GetTime())
   end
@@ -205,7 +241,18 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     plate.debuffs[index].stacks:SetJustifyV("BOTTOM")
     plate.debuffs[index].stacks:SetTextColor(1,1,0)
 
-    plate.debuffs[index].cd = CreateFrame(COOLDOWN_FRAME_TYPE, plate.platename.."Debuff"..index.."Cooldown", plate.debuffs[index], "CooldownFrameTemplate")
+    if ShaguPlates.client <= 11200 then
+      -- create a fake animation frame on vanilla to improve performance
+      plate.debuffs[index].cd = CreateFrame("Frame", plate.platename.."Debuff"..index.."Cooldown", plate.debuffs[index])
+      plate.debuffs[index].cd:SetScript("OnUpdate", CooldownFrame_OnUpdateModel)
+      plate.debuffs[index].cd.AdvanceTime = DoNothing
+      plate.debuffs[index].cd.SetSequence = DoNothing
+      plate.debuffs[index].cd.SetSequenceTime = DoNothing
+    else
+      -- use regular cooldown animation frames on burning crusade and later
+      plate.debuffs[index].cd = CreateFrame(COOLDOWN_FRAME_TYPE, plate.platename.."Debuff"..index.."Cooldown", plate.debuffs[index], "CooldownFrameTemplate")
+    end
+
     plate.debuffs[index].cd.pfCooldownStyleAnimation = 0
     plate.debuffs[index].cd.pfCooldownType = "ALL"
   end
@@ -453,6 +500,13 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     local width = tonumber(C.nameplates.width)
     local debuffsize = tonumber(C.nameplates.debuffsize)
     local healthoffset = tonumber(C.nameplates.health.offset)
+    local orientation = C.nameplates.verticalhealth == "1" and "VERTICAL" or "HORIZONTAL"
+
+    local c = combatstate -- load combat state colors
+    c.CASTING.r, c.CASTING.g, c.CASTING.b, c.CASTING.a = GetStringColor(C.nameplates.combatcasting)
+    c.THREAT.r, c.THREAT.g, c.THREAT.b, c.THREAT.a = GetStringColor(C.nameplates.combatthreat)
+    c.NOTHREAT.r, c.NOTHREAT.g, c.NOTHREAT.b, c.NOTHREAT.a = GetStringColor(C.nameplates.combatnothreat)
+    c.STUN.r, c.STUN.g, c.STUN.b, c.STUN.a = GetStringColor(C.nameplates.combatstun)
 
     nameplate:SetWidth(plate_width)
     nameplate:SetHeight(plate_height)
@@ -460,11 +514,13 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
 
     nameplate.name:SetFont(font, font_size, font_style)
 
+    nameplate.health:SetOrientation(orientation)
     nameplate.health:SetPoint("TOP", nameplate.name, "BOTTOM", 0, healthoffset)
     nameplate.health:SetStatusBarTexture(hptexture)
     nameplate.health:SetWidth(C.nameplates.width)
     nameplate.health:SetHeight(C.nameplates.heighthealth)
     nameplate.health.hlr, nameplate.health.hlg, nameplate.health.hlb, nameplate.health.hla = hlr, hlg, hlb, hla
+
     CreateBackdrop(nameplate.health, default_border)
 
     nameplate.health.text:SetFont(font, font_size - 2, "OUTLINE")
@@ -581,19 +637,13 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     -- target indicator
     if superwow_active and C.nameplates.outcombatstate == "1" then
       local guid = plate.parent:GetName(1) or ""
-      local target = guid.."target"
 
-      if UnitAffectingCombat(guid) then
-        if UnitIsUnit(target, "player") then
-          plate.health.backdrop:SetBackdropBorderColor(.7,.2,.3,1)
-        elseif UnitExists(target) or UnitIsPlayer(guid) then
-          plate.health.backdrop:SetBackdropBorderColor(.7,.7,.2,1)
-        else
-          plate.health.backdrop:SetBackdropBorderColor(.2,.7,.7,1)
-        end
-      else
-        plate.health.backdrop:SetBackdropBorderColor(.2,.2,.2,1)
-      end
+      -- determine color based on combat state
+      local color = GetCombatStateColor(guid)
+      if not color then color = combatstate.NONE end
+
+      -- set border color
+      plate.health.backdrop:SetBackdropBorderColor(color.r, color.g, color.b, color.a)
     elseif target and C.nameplates.targethighlight == "1" then
       plate.health.backdrop:SetBackdropBorderColor(plate.health.hlr, plate.health.hlg, plate.health.hlb, plate.health.hla)
     elseif C.nameplates.outfriendlynpc == "1" and unittype == "FRIENDLY_NPC" then
@@ -707,6 +757,15 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
 
     if superwow_active and unitstr and UnitIsTapped(unitstr) and not UnitIsTappedByPlayer(unitstr) then
       r, g, b, a = .5, .5, .5, .8
+    end
+
+    if superwow_active and C.nameplates.barcombatstate == "1" then
+      local guid = plate.parent:GetName(1) or ""
+      local color = GetCombatStateColor(guid)
+
+      if color then
+        r, g, b, a = color.r, color.g, color.b, color.a
+      end
     end
 
     if r ~= plate.cache.r or g ~= plate.cache.g or b ~= plate.cache.b then
@@ -828,12 +887,6 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       nameplate:SetAlpha(tonumber(C.nameplates.notargalpha))
     end
 
-    -- use timer based updates
-    if not nameplate.tick or nameplate.tick < GetTime() then
-      nameplate.tick = GetTime() + .2
-      update = true
-    end
-
     -- queue update on visual target update
     if nameplate.cache.target ~= target then
       nameplate.cache.target = target
@@ -864,7 +917,7 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       update = true
     end
 
-    -- trigger update when name color changed
+    -- trigger update when level color changed
     local r, g, b = original.level:GetTextColor()
     r, g, b = r + .3, g + .3, b + .3
     if r + g + b ~= nameplate.cache.levelcolor then
@@ -875,31 +928,23 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
 
     -- scan for debuff timeouts
     if nameplate.debuffcache then
-      -- delete timed out caches
       for id, data in pairs(nameplate.debuffcache) do
-        if not data.stop or data.stop < GetTime() then
-          nameplate.debuffcache[id] = nil
-          trigger = true
+        if ( not data.stop or data.stop < GetTime() ) and not data.empty then
+          data.empty = true
+          update = true
         end
       end
+    end
 
-      -- remove nil keys whenever a value was removed
-      if trigger then
-        local count = 1
-        for id, data in pairs(nameplate.debuffcache) do
-          if id ~= count then
-            nameplate.debuffcache[count] = nameplate.debuffcache[id]
-            nameplate.debuffcache[id] = nil
-          end
-          count = count + 1
-        end
-        update = true
-      end
+    -- use timer based updates
+    if not nameplate.tick or nameplate.tick < GetTime() then
+      update = true
     end
 
     -- run full updates if required
     if update then
       nameplates:OnDataChanged(nameplate)
+      nameplate.tick = GetTime() + .5
     end
 
     -- target zoom
@@ -1034,8 +1079,12 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       local parent = self
       local nameplate = self.nameplate
       local plate = (C.nameplates["overlap"] == "1" or C.nameplates["vertical_offset"] ~= "0") and nameplate or parent
-      local clickable = C.nameplates["clickthrough"] ~= "1" and true or false
 
+      -- disable all clicks for now
+      parent:EnableMouse(false)
+      nameplate:EnableMouse(false)
+
+      -- adjust vertical offset
       if C.nameplates["vertical_offset"] ~= "0" then
         nameplate:SetPoint("TOP", parent, "TOP", 0, tonumber(C.nameplates["vertical_offset"]))
       end
@@ -1051,13 +1100,6 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       else
         plate:SetScript("OnMouseDown", nil)
       end
-
-      -- disable all click events
-      parent:EnableMouse(false)
-      nameplate:EnableMouse(false)
-
-      -- make the actual plate clickable
-      plate:EnableMouse(clickable)
     end
 
     local hookOnDataChanged = nameplates.OnDataChanged
@@ -1072,6 +1114,18 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
 
     local hookOnUpdate = nameplates.OnUpdate
     nameplates.OnUpdate = function(self)
+      -- initialize shortcut variables
+      local plate = (C.nameplates["overlap"] == "1" or C.nameplates["vertical_offset"] ~= "0") and this.nameplate or this
+      local clickable = C.nameplates["clickthrough"] ~= "1" and true or false
+
+      -- disable all click events
+      if not clickable then
+        this:EnableMouse(false)
+        this.nameplate:EnableMouse(false)
+      else
+        plate:EnableMouse(clickable)
+      end
+
       if C.nameplates["overlap"] == "1" then
         if this:GetWidth() > 1 then
           -- set parent to 1 pixel to have them overlap each other
